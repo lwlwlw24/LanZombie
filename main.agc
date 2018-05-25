@@ -4,27 +4,46 @@
 #include "../Function Lib/CoreLibrary.agc"
 #include "../Function Lib/GUILibrary.agc"
 #include "../Function Lib/LanLibrary.agc"
+#include "../Function Lib/HealthBar.agc"
+
+#constant MAXTASKNUMBERHOST = 2
+#constant DEFAULTTASKTIMEOUT = 3
+
+#constant TOTALZOMBIES = 20
+#constant TOTALAMMO = 20//TOTALZOMBIES * 2
+#constant MAXHOUSEHP = 4 //TOTALZOMBIES *0.2
 
 type HostDataType 
-	task as integer[2] // all task storage here
+	taskList as integer[MAXTASKNUMBERHOST] // all task storage here
+	taskTimeout as float[MAXTASKNUMBERHOST]
 	socre as integer
+	ammo as integer
+	demage as integer
+	timer as float
 endtype
 
 type ClientDataType
-	task as integer // 
+	taskItem as integer // 
+	taskTimeout as float
 	textID as integer
 	buttons as integer[2]
+	timer as float
 endtype
 
 type GameType
 	score as integer
-	txtID as integer
+	ammo as integer
+	demage as integer
+	txtID as integer	//for score
+	txtAmmoID as integer 
+	txtDemageID as integer
 	LAN as LANType
 	host as HostDataType
 	client as ClientDataType
+	bar as HealthBarType
 endtype
 
-global taskList as string[8] = ["", "Up", "Down", "Left", "Right", "bala", "bila", "Dir7", "Dir8"]
+global taskTextList as string[8] = ["", "Up", "Down", "Left", "Right", "bala", "bila", "Dir7", "Dir8"]
 
 global g as GameType
 
@@ -32,127 +51,166 @@ global g as GameType
 //*** Main program ***
 //***************************************
 
-InitialiseScreen(1024,768,"LanZombie", 0xA8A8A8,%1111)
+//SetSyncRate(30, 0)
+
+InitialiseScreen(1024,768,"LanZombie", 0x28A1DE,%1111)
 
 
 g.LAN = SetNetworkData("Zombie", 1026, 2, 2)
 SetUpNetwork(g.LAN, "opbut.png")
 
-//LoadResources()
+LoadResources()
 InitialiseGameVariables()
 CreateInitialLayout()
 
-do
-	UpdateTask()
-	DisplayTask()
+//do
+	////UpdateTask()
+	////DisplayTask()
+	
+	//GetUserInput()
+	//HandleUserInput()
+	//HandleOther()
+	//Sync()
+//loop
+
+repeat
 	GetUserInput()
 	HandleUserInput()
 	HandleOther()
 	Sync()
-loop
+until CheckIfGameOver() = 1
+
+DisplayGameOverPage()
+
+end
+
 
 //***************************************
 //*** Functions ***
 //***************************************
 
 function InitialiseGameVariables()
-	//taskList = ["", "Up", "Down", "Left", "Right"]
+	//taskTextList = ["", "Up", "Down", "Left", "Right"]
 	if IsNetworkHost(g.LAN.netID)
 		g.host.socre = 0
+		g.host.ammo = 0
+		g.host.demage = 0
 		SetNetworkLocalInteger(g.LAN.netID, "score", g.host.socre)
+		g.host.timer = Timer()
 	endif
+	g.client.timer = Timer()	
 endfunction
 	
 function LoadResources()
-
+	g.bar.imgBar = LoadImage("HealthBar.png")
+	g.bar.imgOverLay = LoadImage("HealthBarOverLay.png")
 endfunction
 
 function CreateInitialLayout()
 	buttons as integer
 	if IsNetworkHost(g.LAN.netID)
 		for i = 1 to 2
-			g.client.buttons[i] = CreateGUIButton(25+(i-1)*25, 70, 20, 12, "opbut.png", taskList[i] ) 
+			g.client.buttons[i] = CreateGUIButton(27+(i-1)*25, 70, 20, 12, "opbut.png", taskTextList[i] ) 
 		next i
 	else
 		while GetNetworkNumClients(g.LAN.netID) <= 1
 			Sleep(50)
 		endwhile
 		for i = 1 to 2
-			g.client.buttons[i] = CreateGUIButton(25+(i-1)*25, 70, 20, 12, "opbut.png", taskList[(GetNetworkMyClientID(g.LAN.netID)-1)*2+i] ) 
+			g.client.buttons[i] = CreateGUIButton(27+(i-1)*25, 70, 20, 12, "opbut.png", taskTextList[(GetNetworkMyClientID(g.LAN.netID)-1)*2+i] ) 
 		next i
 	endif
+	
+	g.bar.sizeX = 50
+	g.bar.sizeY = -1
+	g.bar.positionX = 25
+	g.bar.positionY = 60
+	g.bar.percentage = 1
+	g.bar.healthMax = DEFAULTTASKTIMEOUT
+	CreateHealthBar(g.bar)
+	
 endfunction
 
 function UpdateTask()
+	newTimeout as float
+	elapseTime as float
+	
+	elapseTime = Timer()-g.host.timer
+	g.host.timer = Timer()
+	
 	if IsNetworkHost(g.LAN.netID)
 		//generate task if this is host
 		if GetNetworkNumClients(g.LAN.netID) > 1
-			if g.host.task.length < GetNetworkNumClients(g.LAN.netID)
-				g.host.task.insert(0)
+			if g.host.taskList.length < GetNetworkNumClients(g.LAN.netID)
+				g.host.taskList.insert(0)
+				g.host.taskTimeout.insert(0.0)
 			endif
-			for i = 1 to GetNetworkNumClients(g.LAN.netID)
-				if g.host.task[i] = 0
-					g.host.task[i] = Random(1, GetNetworkNumClients(g.LAN.netID)*2)
-					if i <> 1
-						SetNetworkLocalInteger(g.LAN.netID, "task"+Str(i), g.host.task[i])
+			for clientIndex = 1 to GetNetworkNumClients(g.LAN.netID)
+				//*** check if the task is finished or just timeout, so need to refresh the task
+				if g.host.taskList[clientIndex] = 0 or g.host.taskTimeout[clientIndex] < 0
+					if g.host.taskTimeout[clientIndex] < 0
+						inc g.host.demage
+						SetNetworkLocalInteger(g.LAN.netID, "demage", g.host.demage)
 					endif
+					//*** assign a task and its timeout
+					g.host.taskList[clientIndex] = Random(1, GetNetworkNumClients(g.LAN.netID)*2)		//assign task
+					g.host.taskTimeout[clientIndex] = DEFAULTTASKTIMEOUT		//assign task timeout
+					//if this is not the host, need to send task and timeout over network
+					if clientIndex <> 1
+						SetNetworkLocalInteger(g.LAN.netID, "task"+Str(clientIndex), g.host.taskList[clientIndex])
+						SetNetworkLocalFloat(g.LAN.netID, "taskTimeout"+Str(clientIndex), g.host.taskTimeout[clientIndex], 1)
+					else
+						g.client.taskTimeout = g.host.taskTimeout[1]
+					endif
+				//*** this client just need to update the task timeout
+				else
+					g.host.taskTimeout[clientIndex] = g.host.taskTimeout[clientIndex] - elapseTime
 				endif
-			next i
+				
+			next clientIndex
 		else 
 			Print("No Client Connected")
 		endif
 		//this is host, get task from local task list
-		g.client.task = g.host.task[1]
+		g.client.taskItem = g.host.taskList[1]
 	//this is a client, get task from host
 	else
-		g.client.task = GetNetworkClientInteger(g.LAN.netID, 1, "task"+Str(GetNetworkMyClientID(g.LAN.netID)))
+		g.client.taskItem = GetNetworkClientInteger(g.LAN.netID, 1, "task"+Str(GetNetworkMyClientID(g.LAN.netID)))
+		newTimeout = GetNetworkClientFloat(g.LAN.netID, 1, "taskTimeout"+Str(GetNetworkMyClientID(g.LAN.netID)))
+		if newTimeout <> 0
+			g.client.taskTimeout = newTimeout
+		endif
 	endif
-	
 endfunction
 
 function DisplayTask()
+	elapseTime as float
+	
+	elapseTime = Timer()-g.client.timer
+	g.client.timer = Timer()
+	
 	if g.client.textID = 0
-		g.client.textID = CreateText(taskList[g.client.task])
+		g.client.textID = CreateText(taskTextList[g.client.taskItem])
 		SetTextAlignment(g.client.textID, 1)
 		SetTextPosition(g.client.textID, 50, 25)
-		SetTextColor(g.client.textID, 0xff, 0, 0, 0xff)
+		SetTextColor(g.client.textID, 234, 17, 33, 0xff)
 		SetTextSize(g.client.textID, 20)
 	else
-		SetTextString(g.client.textID,taskList[g.client.task])
+		SetTextString(g.client.textID,taskTextList[g.client.taskItem])
 	endif
-	//Print(taskList[g.client.task])
-endfunction
-
-function GetUserInput()
-	for i = 1 to 2
-		if HandleGUIButton(g.client.buttons[i]) 
-			SetNetworkLocalInteger(g.LAN.netID, Str((GetNetworkMyClientID(g.LAN.netID)-1)*2+i), 1, 1)
-		endif
-	next i
-endfunction
-
-function HandleUserInput()
-	if IsNetworkHost(g.LAN.netID)
-		clientid = GetNetworkFirstClient(g.LAN.netID)
-		while clientid <> 0
-			for i = 1 to 2
-				if GetNetworkClientInteger(g.LAN.netID, clientid, Str((clientid-1)*2+i))
-					for taskIndex = 1 to GetNetworkNumClients(g.LAN.netID)
-						if g.host.task[taskIndex] = (clientid-1)*2+i
-							g.host.task[taskIndex] = 0
-							inc g.host.socre
-							SetNetworkLocalInteger(g.LAN.netID, "score", g.host.socre)
-						endif
-					next taskIndex
-				endif
-			next i
-		
-			clientid = GetNetworkNextClient(g.LAN.netID)
-		endwhile
+	//Print(taskTextList[g.client.taskItem])
+	//display task timeout here todo
+	dec g.client.taskTimeout, elapseTime
+	
+	if g.client.taskTimeout < 0
+		g.client.taskTimeout = 0
 	endif
+	//Print(g.client.taskTimeout)
+	g.bar.percentage = g.client.taskTimeout / g.bar.healthMax
+	UpdateHealthBar(g.bar)
 endfunction
 
-function HandleOther()
+function UpdateScore()
 	g.score = GetNetworkClientInteger(g.LAN.netID, 1, "score")
 	if g.txtID = 0
 		g.txtID = CreateText("Total Zombie Kills: "+Str(g.score))
@@ -163,3 +221,102 @@ function HandleOther()
 	endif
 endfunction
 
+function updateAmmo()
+	g.ammo = GetNetworkClientInteger(g.LAN.netID, 1, "ammo")
+	if g.txtAmmoID = 0
+		g.txtAmmoID = CreateText("the Ammo you spent: "+Str(g.ammo))
+		SetTextAlignment(g.txtAmmoID, 2)
+		SetTextPosition(g.txtAmmoID, 100, 0)
+	else
+		SetTextString(g.txtAmmoID, "the Ammo you spent: "+Str(g.ammo))
+	endif
+endfunction
+
+function updateDemage()
+	g.demage = GetNetworkClientInteger(g.LAN.netID, 1, "demage")
+	if g.txtDemageID = 0
+		g.txtDemageID = CreateText("House HP: "+Str(MAXHOUSEHP - g.demage))
+		SetTextAlignment(g.txtDemageID, 1)
+		SetTextPosition(g.txtDemageID, 50, 0)
+	else
+		if g.demage <= MAXHOUSEHP
+			SetTextString(g.txtDemageID, "House HP: "+Str(MAXHOUSEHP - g.demage))
+		else
+			SetTextColor(g.txtDemageID, 234, 17, 33, 0xFF)
+			SetTextString(g.txtDemageID, "HOUSE DOWN")
+		endif
+	endif
+
+endfunction
+
+function GetUserInput()
+	for buttonIndex = 1 to 2
+		if HandleGUIButton(g.client.buttons[buttonIndex]) 
+			SetNetworkLocalInteger(g.LAN.netID, Str((GetNetworkMyClientID(g.LAN.netID)-1)*2+buttonIndex), 1, 1)
+		endif
+	next buttonIndex
+endfunction
+
+function HandleUserInput()
+	if IsNetworkHost(g.LAN.netID)
+		clientid = GetNetworkFirstClient(g.LAN.netID)
+		while clientid <> 0
+			for buttonIndex = 1 to 2
+				if GetNetworkClientInteger(g.LAN.netID, clientid, Str((clientid-1)*2+buttonIndex))
+					inc g.host.ammo
+					SetNetworkLocalInteger(g.LAN.netID, "ammo", g.host.ammo)
+					for taskIndex = 1 to GetNetworkNumClients(g.LAN.netID)
+						if g.host.taskList[taskIndex] = (clientid-1)*2+buttonIndex
+							g.host.taskList[taskIndex] = 0
+							inc g.host.socre
+							SetNetworkLocalInteger(g.LAN.netID, "score", g.host.socre)
+						endif
+					next taskIndex
+				endif
+			next buttonIndex
+			clientid = GetNetworkNextClient(g.LAN.netID)
+		endwhile
+	endif
+endfunction
+
+function HandleOther()
+	UpdateTask()
+	DisplayTask()
+	UpdateScore()
+	updateAmmo()
+	updateDemage()
+endfunction
+
+function CheckIfGameOver()
+	result as integer
+	if g.score >= TOTALZOMBIES
+		result = 1
+	endif
+	if g.ammo > TOTALAMMO
+		result = 1
+	endif
+	if g.demage > MAXHOUSEHP
+		result = 1
+	endif
+endfunction result
+
+function DisplayGameOverPage()	
+	txtID as integer
+	txtID = CreateText("")
+	SetTextAlignment(txtID, 1)
+	SetTextPosition(txtID, 50, 30)
+	SetTextColor(txtID, 0, 0, 0, 0xAF)
+	
+	if g.score >= TOTALZOMBIES
+		SetTextSize(txtID, 40)
+		SetTextString(txtID, "YOU WIN")
+	elseif g.demage > MAXHOUSEHP
+		SetTextSize(txtID, 30)
+		SetTextString(txtID, "YOU LOSE")
+	elseif g.ammo > TOTALAMMO
+		SetTextSize(txtID, 20)
+		SetTextString(txtID, "OUT OF AMMO")
+	endif
+	Sync()
+	Sleep(10000)
+endfunction
