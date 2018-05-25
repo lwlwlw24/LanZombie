@@ -2,16 +2,17 @@
 // Created: 2018-05-24
 
 #include "../Function Lib/CoreLibrary.agc"
-#include "../Function Lib/GUILibrary.agc"
+//#include "../Function Lib/GUILibrary.agc"
+#include "../Function Lib/GUILibrary_CN.agc"
 #include "../Function Lib/LanLibrary.agc"
 #include "../Function Lib/HealthBar.agc"
 
-#constant MAXTASKNUMBERHOST = 2
-#constant DEFAULTTASKTIMEOUT = 3
+#constant MAXTASKNUMBERHOST = 4
+#constant DEFAULTTASKTIMEOUT = 8
 
-#constant TOTALZOMBIES = 20
-#constant TOTALAMMO = 20//TOTALZOMBIES * 2
-#constant MAXHOUSEHP = 4 //TOTALZOMBIES *0.2
+#constant TOTALZOMBIES = 40
+#constant TOTALAMMO = 40//TOTALZOMBIES * 2
+#constant MAXHOUSEHP = 10 //TOTALZOMBIES *0.2
 
 type HostDataType 
 	taskList as integer[MAXTASKNUMBERHOST] // all task storage here
@@ -43,9 +44,11 @@ type GameType
 	bar as HealthBarType
 endtype
 
-global taskTextList as string[8] = ["", "Up", "Down", "Left", "Right", "bala", "bila", "Dir7", "Dir8"]
+global taskTextList as string[8] = ["", "前窗", "前门", "左前窗", "左窗", "后门", "后窗", "侧门", "草坪"]
 
 global g as GameType
+
+global fontID as integer
 
 //***************************************
 //*** Main program ***
@@ -53,7 +56,7 @@ global g as GameType
 
 //SetSyncRate(30, 0)
 
-InitialiseScreen(1024,768,"LanZombie", 0x28A1DE,%1111)
+InitialiseScreen(1024,768,"Lan Zombie", 0x28A1DE,%1111)
 
 
 g.LAN = SetNetworkData("Zombie", 1026, 2, 2)
@@ -62,16 +65,6 @@ SetUpNetwork(g.LAN, "opbut.png")
 LoadResources()
 InitialiseGameVariables()
 CreateInitialLayout()
-
-//do
-	////UpdateTask()
-	////DisplayTask()
-	
-	//GetUserInput()
-	//HandleUserInput()
-	//HandleOther()
-	//Sync()
-//loop
 
 repeat
 	GetUserInput()
@@ -104,20 +97,22 @@ endfunction
 function LoadResources()
 	g.bar.imgBar = LoadImage("HealthBar.png")
 	g.bar.imgOverLay = LoadImage("HealthBarOverLay.png")
+	fontID = LoadFont("font_GB2312.ttf")
+	
 endfunction
 
 function CreateInitialLayout()
 	buttons as integer
 	if IsNetworkHost(g.LAN.netID)
 		for i = 1 to 2
-			g.client.buttons[i] = CreateGUIButton(27+(i-1)*25, 70, 20, 12, "opbut.png", taskTextList[i] ) 
+			g.client.buttons[i] = CreateGUIButton(27+(i-1)*25, 70, 20, 12, "opbut.png", taskTextList[i], fontID) 
 		next i
 	else
 		while GetNetworkNumClients(g.LAN.netID) <= 1
 			Sleep(50)
 		endwhile
 		for i = 1 to 2
-			g.client.buttons[i] = CreateGUIButton(27+(i-1)*25, 70, 20, 12, "opbut.png", taskTextList[(GetNetworkMyClientID(g.LAN.netID)-1)*2+i] ) 
+			g.client.buttons[i] = CreateGUIButton(27+(i-1)*25, 70, 20, 12, "opbut.png", taskTextList[(GetNetworkMyClientID(g.LAN.netID)-1)*2+i], fontID ) 
 		next i
 	endif
 	
@@ -191,6 +186,7 @@ function DisplayTask()
 	
 	if g.client.textID = 0
 		g.client.textID = CreateText(taskTextList[g.client.taskItem])
+		SetTextFont(g.client.textID, fontID)
 		SetTextAlignment(g.client.textID, 1)
 		SetTextPosition(g.client.textID, 50, 25)
 		SetTextColor(g.client.textID, 234, 17, 33, 0xff)
@@ -213,37 +209,41 @@ endfunction
 function UpdateScore()
 	g.score = GetNetworkClientInteger(g.LAN.netID, 1, "score")
 	if g.txtID = 0
-		g.txtID = CreateText("Total Zombie Kills: "+Str(g.score))
+		//g.txtID = CreateText("Total Zombie Kills: "+Str(g.score))
+		g.txtID = CreateText("击杀僵尸"+Str(g.score))
+		SetTextFont(g.txtID, fontID)
 		SetTextAlignment(g.txtID, 1)
 		SetTextPosition(g.txtID, 50, 10)
 	else
-		SetTextString(g.txtID, "Total Zombie Kills: "+Str(g.score))
+		SetTextString(g.txtID, "击杀僵尸"+Str(g.score))
 	endif
 endfunction
 
 function updateAmmo()
 	g.ammo = GetNetworkClientInteger(g.LAN.netID, 1, "ammo")
 	if g.txtAmmoID = 0
-		g.txtAmmoID = CreateText("the Ammo you spent: "+Str(g.ammo))
+		g.txtAmmoID = CreateText("剩余弹药"+Str(TOTALAMMO - g.ammo))
+		SetTextFont(g.txtAmmoID, fontID)
 		SetTextAlignment(g.txtAmmoID, 2)
 		SetTextPosition(g.txtAmmoID, 100, 0)
 	else
-		SetTextString(g.txtAmmoID, "the Ammo you spent: "+Str(g.ammo))
+		SetTextString(g.txtAmmoID, "剩余弹药"+Str(TOTALAMMO - g.ammo))
 	endif
 endfunction
 
 function updateDemage()
 	g.demage = GetNetworkClientInteger(g.LAN.netID, 1, "demage")
 	if g.txtDemageID = 0
-		g.txtDemageID = CreateText("House HP: "+Str(MAXHOUSEHP - g.demage))
+		g.txtDemageID = CreateText("房屋寿命: "+Str(MAXHOUSEHP - g.demage))
+		SetTextFont(g.txtDemageID, fontID)
 		SetTextAlignment(g.txtDemageID, 1)
 		SetTextPosition(g.txtDemageID, 50, 0)
 	else
 		if g.demage <= MAXHOUSEHP
-			SetTextString(g.txtDemageID, "House HP: "+Str(MAXHOUSEHP - g.demage))
+			SetTextString(g.txtDemageID, "房屋寿命: "+Str(MAXHOUSEHP - g.demage))
 		else
 			SetTextColor(g.txtDemageID, 234, 17, 33, 0xFF)
-			SetTextString(g.txtDemageID, "HOUSE DOWN")
+			SetTextString(g.txtDemageID, "房屋彻底损坏")
 		endif
 	endif
 
@@ -303,19 +303,20 @@ endfunction result
 function DisplayGameOverPage()	
 	txtID as integer
 	txtID = CreateText("")
+	SetTextFont(txtID, fontID)
 	SetTextAlignment(txtID, 1)
 	SetTextPosition(txtID, 50, 30)
 	SetTextColor(txtID, 0, 0, 0, 0xAF)
 	
 	if g.score >= TOTALZOMBIES
 		SetTextSize(txtID, 40)
-		SetTextString(txtID, "YOU WIN")
+		SetTextString(txtID, "胜利")
 	elseif g.demage > MAXHOUSEHP
 		SetTextSize(txtID, 30)
-		SetTextString(txtID, "YOU LOSE")
+		SetTextString(txtID, "失败")
 	elseif g.ammo > TOTALAMMO
 		SetTextSize(txtID, 20)
-		SetTextString(txtID, "OUT OF AMMO")
+		SetTextString(txtID, "没有子弹")
 	endif
 	Sync()
 	Sleep(10000)
