@@ -24,7 +24,7 @@ type GameType
 	client as ClientDataType
 endtype
 
-global taskList as string[4] = ["", "Up", "Down", "Left", "Right"]
+global taskList as string[8] = ["", "Up", "Down", "Left", "Right", "bala", "bila", "Dir7", "Dir8"]
 
 global g as GameType
 
@@ -87,11 +87,14 @@ function UpdateTask()
 	if IsNetworkHost(g.LAN.netID)
 		//generate task if this is host
 		if GetNetworkNumClients(g.LAN.netID) > 1
+			if g.host.task.length < GetNetworkNumClients(g.LAN.netID)
+				g.host.task.insert(0)
+			endif
 			for i = 1 to GetNetworkNumClients(g.LAN.netID)
 				if g.host.task[i] = 0
-					g.host.task[i] = Random(1, 4)
+					g.host.task[i] = Random(1, GetNetworkNumClients(g.LAN.netID)*2)
 					if i <> 1
-						SetNetworkLocalInteger(g.LAN.netID, "task", g.host.task[i])
+						SetNetworkLocalInteger(g.LAN.netID, "task"+Str(i), g.host.task[i])
 					endif
 				endif
 			next i
@@ -102,7 +105,7 @@ function UpdateTask()
 		g.client.task = g.host.task[1]
 	//this is a client, get task from host
 	else
-		g.client.task = GetNetworkClientInteger(g.LAN.netID, 1, "task")
+		g.client.task = GetNetworkClientInteger(g.LAN.netID, 1, "task"+Str(GetNetworkMyClientID(g.LAN.netID)))
 	endif
 	
 endfunction
@@ -134,7 +137,7 @@ function HandleUserInput()
 		while clientid <> 0
 			for i = 1 to 2
 				if GetNetworkClientInteger(g.LAN.netID, clientid, Str((clientid-1)*2+i))
-					for taskIndex = 1 to 2
+					for taskIndex = 1 to GetNetworkNumClients(g.LAN.netID)
 						if g.host.task[taskIndex] = (clientid-1)*2+i
 							g.host.task[taskIndex] = 0
 							inc g.host.socre
