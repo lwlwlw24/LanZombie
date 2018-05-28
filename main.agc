@@ -58,13 +58,13 @@ global fontID as integer
 
 InitialiseScreen(1024,768,"Lan Zombie", 0x28A1DE,%1111)
 
+LoadResources()
 
 g.LAN = SetNetworkData("Zombie", 1026, 2, 2)
 SetUpNetwork(g.LAN, "opbut.png")
 
 GameStartPage()
 
-LoadResources()
 InitialiseGameVariables()
 CreateInitialLayout()
 
@@ -88,6 +88,13 @@ function GameStartPage()
 	button as integer
 	gameStart as integer
 	txtNoPID as integer
+	
+	txtNoPID = CreateText("")
+	SetTextAlignment(txtNoPID, 1)
+	SetTextSize(txtNoPID, 5)
+	SetTextPosition(txtNoPID, 50, 25)
+	SetTextFont(txtNoPID, fontID)
+
 	//*** if this is the host,
 	// update the number of players
 	// wait for user tapping start
@@ -95,14 +102,7 @@ function GameStartPage()
 	// exit
 	if IsNetworkHost(g.LAN.netID)
 		repeat
-			if txtNoPID = 0
-				txtNoPID = CreateText("Number of player: "+Str(GetNetworkNumClients(g.LAN.netID)))
-				SetTextAlignment(txtNoPID, 1)
-				SetTextSize(txtNoPID, 5)
-				SetTextPosition(txtNoPID, 50, 25)
-			else
-				SetTextString(txtNoPID, "Number of players: "+Str(GetNetworkNumClients(g.LAN.netID)))
-			endif
+			SetTextString(txtNoPID, "在线玩家: "+Str(GetNetworkNumClients(g.LAN.netID)))
 			//Print("Number of players: "+Str(GetNetworkNumClients(g.LAN.netID)))
 			if GetNetworkNumClients(g.LAN.netID) >= 2
 				if button = 0
@@ -126,14 +126,7 @@ function GameStartPage()
 	// exit 
 	else
 		repeat
-			if txtNoPID = 0
-				txtNoPID = CreateText("Number of player: "+Str(GetNetworkNumClients(g.LAN.netID)))
-				SetTextAlignment(txtNoPID, 1)
-				SetTextSize(txtNoPID, 5)
-				SetTextPosition(txtNoPID, 50, 25)
-			else
-				SetTextString(txtNoPID, "Number of players: "+Str(GetNetworkNumClients(g.LAN.netID)))
-			endif
+			SetTextString(txtNoPID, "在线玩家: "+Str(GetNetworkNumClients(g.LAN.netID)))
 			if GetNetworkClientInteger(g.LAN.netID, 1, "ifGameStarted")
 				gameStart = 1
 			endif
