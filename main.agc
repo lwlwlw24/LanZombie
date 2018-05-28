@@ -8,9 +8,9 @@
 #include "../Function Lib/HealthBar.agc"
 
 #constant MAXTASKNUMBERHOST = 4
-#constant DEFAULTTASKTIMEOUT = 8
+#constant DEFAULTTASKTIMEOUT = 4
 
-#constant TOTALZOMBIES = 40
+#constant TOTALZOMBIES = 60
 #constant TOTALAMMO = 40//TOTALZOMBIES * 2
 #constant MAXHOUSEHP = 10 //TOTALZOMBIES *0.2
 
@@ -62,6 +62,8 @@ InitialiseScreen(1024,768,"Lan Zombie", 0x28A1DE,%1111)
 g.LAN = SetNetworkData("Zombie", 1026, 2, 2)
 SetUpNetwork(g.LAN, "opbut.png")
 
+GameStartPage()
+
 LoadResources()
 InitialiseGameVariables()
 CreateInitialLayout()
@@ -81,6 +83,66 @@ end
 //***************************************
 //*** Functions ***
 //***************************************
+
+function GameStartPage()
+	button as integer
+	gameStart as integer
+	txtNoPID as integer
+	//*** if this is the host,
+	// update the number of players
+	// wait for user tapping start
+	// send Start signal to all client
+	// exit
+	if IsNetworkHost(g.LAN.netID)
+		repeat
+			if txtNoPID = 0
+				txtNoPID = CreateText("Number of player: "+Str(GetNetworkNumClients(g.LAN.netID)))
+				SetTextAlignment(txtNoPID, 1)
+				SetTextSize(txtNoPID, 5)
+				SetTextPosition(txtNoPID, 50, 25)
+			else
+				SetTextString(txtNoPID, "Number of players: "+Str(GetNetworkNumClients(g.LAN.netID)))
+			endif
+			//Print("Number of players: "+Str(GetNetworkNumClients(g.LAN.netID)))
+			if GetNetworkNumClients(g.LAN.netID) >= 2
+				if button = 0
+					button = CreateGUIButton(40, 70, 20, 12, "opbut.png", "Start", fontID)
+				else
+					if HandleGUIButton(button) and gameStart = 0
+						//send info the clients say game start, go next page
+						SetNetworkLocalInteger(g.LAN.netID, "ifGameStarted", 1)
+						gameStart = 1 
+					endif
+				endif
+			endif
+			Sync()
+		until gameStart
+		DeleteGUIButton(button)
+		SetNetworkNoMoreClients(g.LAN.netID)
+		DeleteText(txtNoPID)
+	//*** if this is the client,
+	//Join the network
+	// wait for start signal
+	// exit 
+	else
+		repeat
+			if txtNoPID = 0
+				txtNoPID = CreateText("Number of player: "+Str(GetNetworkNumClients(g.LAN.netID)))
+				SetTextAlignment(txtNoPID, 1)
+				SetTextSize(txtNoPID, 5)
+				SetTextPosition(txtNoPID, 50, 25)
+			else
+				SetTextString(txtNoPID, "Number of players: "+Str(GetNetworkNumClients(g.LAN.netID)))
+			endif
+			if GetNetworkClientInteger(g.LAN.netID, 1, "ifGameStarted")
+				gameStart = 1
+			endif
+			Sync()
+		until gameStart
+		DeleteText(txtNoPID)
+	endif
+	
+endfunction
 
 function InitialiseGameVariables()
 	//taskTextList = ["", "Up", "Down", "Left", "Right"]
